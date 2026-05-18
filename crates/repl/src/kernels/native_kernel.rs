@@ -23,6 +23,20 @@ use std::{
 use uuid::Uuid;
 
 use super::{KernelSession, RunningKernel, start_kernel_tasks};
+use crate::repl_settings::ReplSettings;
+use settings::Settings as _;
+
+/// Resolve the `COLUMNS` value to hand to a kernel process based on the user's
+/// `repl.output_max_width_columns` setting. Sentinel `0` returns `None`, which
+/// leaves COLUMNS unset and preserves the kernel / library default — important
+/// because libraries like polars render unnecessarily wide tables when COLUMNS
+/// is large, which produces a worse UX than their built-in defaults.
+fn resolve_columns_hint(output_max_width_columns: usize) -> Option<usize> {
+    match output_max_width_columns {
+        0 => None,
+        n => Some(n),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct LocalKernelSpecification {
@@ -120,6 +134,12 @@ impl NativeRunningKernel {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Box<dyn RunningKernel>>> {
+        // Resolve the COLUMNS hint before the spawn so we don't have to
+        // re-enter the app context from the async block. None means "do not
+        // override the kernel's default" — see `resolve_columns_hint`.
+        let columns_hint =
+            resolve_columns_hint(ReplSettings::get_global(cx).output_max_width_columns);
+
         window.spawn(cx, async move |cx| {
             let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
             let ports = peek_ports(ip).await?;
@@ -147,6 +167,11 @@ impl NativeRunningKernel {
 
             let mut cmd = kernel_specification.command(&connection_path)?;
             cmd.current_dir(&working_directory);
+            if let Some(hint) = columns_hint {
+                // Applied after `command()` so it overrides any default
+                // COLUMNS that may be present in the kernelspec env block.
+                cmd.env("COLUMNS", hint.to_string());
+            }
 
             let mut process = util::process::Child::spawn(
                 cmd,
@@ -405,6 +430,17 @@ mod test {
     use gpui::TestAppContext;
     use project::FakeFs;
     use serde_json::json;
+
+    #[test]
+    fn columns_hint_is_none_when_setting_is_zero() {
+        assert_eq!(resolve_columns_hint(0), None);
+    }
+
+    #[test]
+    fn columns_hint_uses_setting_value_when_non_zero() {
+        assert_eq!(resolve_columns_hint(80), Some(80));
+        assert_eq!(resolve_columns_hint(2000), Some(2000));
+    }
 
     #[gpui::test]
     async fn test_get_kernelspecs(cx: &mut TestAppContext) {

@@ -189,6 +189,22 @@ To configure a different default kernel for a language, you can assign a kernel 
 }
 ```
 
+## Sizing Plain-Text Output
+
+When a kernel prints a wide or tall structure such as a pandas/polars DataFrame, the output block grows to fit the content rather than wrapping internally. If the rendered output is wider than the editor, the block becomes horizontally scrollable.
+
+The grid growth is bounded by an internal safety cap. To set your own upper bound — for example, to keep output narrow on a small screen — configure `output_max_width_columns` in your `settings.json`:
+
+```json [settings]
+{
+  "repl": {
+    "output_max_width_columns": 200
+  }
+}
+```
+
+The default value `0` lets the output grow up to the internal safety cap and leaves the kernel's `COLUMNS` environment variable unset. When you set `output_max_width_columns` to a non-zero value, that same number is also exported as `COLUMNS` to local Python and WSL kernels so libraries like pandas can size their output to match. Note that polars renders unnecessarily wide tables when `COLUMNS` is large, so for polars you typically want to leave this at `0` and use `pl.Config.set_tbl_width_chars(...)` instead.
+
 ## Interactive Input
 
 When code execution requires user input (such as Python's `input()` function), the REPL displays an input prompt below the cell output.

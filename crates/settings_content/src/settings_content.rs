@@ -1232,6 +1232,13 @@ pub struct ReplSettingsContent {
     ///
     /// Default: 0
     pub output_max_height_lines: Option<usize>,
+    /// Maximum number of columns the plain-text output block may grow to in
+    /// order to display kernel output without internal wrapping. When the
+    /// rendered output exceeds this width it becomes horizontally scrollable.
+    /// Set to 0 to allow growth up to the internal safety cap.
+    ///
+    /// Default: 0
+    pub output_max_width_columns: Option<usize>,
 }
 
 /// Settings for configuring the which-key popup behaviour.

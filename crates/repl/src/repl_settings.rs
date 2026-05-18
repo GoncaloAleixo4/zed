@@ -27,6 +27,13 @@ pub struct ReplSettings {
     ///
     /// Default: 0
     pub output_max_height_lines: usize,
+    /// Maximum number of columns the plain-text output block may grow to in
+    /// order to display kernel output without internal wrapping. When the
+    /// rendered output exceeds this width it becomes horizontally scrollable.
+    /// Set to 0 to allow growth up to the internal safety cap.
+    ///
+    /// Default: 0
+    pub output_max_width_columns: usize,
 }
 
 impl Settings for ReplSettings {
@@ -39,6 +46,7 @@ impl Settings for ReplSettings {
             inline_output: repl.inline_output.unwrap_or(true),
             inline_output_max_length: repl.inline_output_max_length.unwrap_or(50),
             output_max_height_lines: repl.output_max_height_lines.unwrap_or(0),
+            output_max_width_columns: repl.output_max_width_columns.unwrap_or(0),
         }
     }
 }

@@ -277,7 +277,17 @@ impl Output {
             plain::max_width_for_columns(ReplSettings::get_global(cx).max_columns, window, cx);
         let content = self.content(window, cx);
 
-        let needs_horizontal_scroll = matches!(self, Self::Table { .. });
+        let needs_horizontal_scroll = matches!(
+            self,
+            Self::Table { .. } | Self::Plain { .. } | Self::Stream { .. }
+        );
+        // The plain-text path now sizes its canvas to actual content width;
+        // applying `max_w` here would clip the canvas to the legacy
+        // `max_columns` width, defeating the horizontal scroll.
+        let content_max_width = match self {
+            Self::Plain { .. } | Self::Stream { .. } => None,
+            _ => max_width,
+        };
 
         h_flex()
             .id("output-content")
@@ -293,7 +303,7 @@ impl Output {
                     .when(!needs_horizontal_scroll, |el| {
                         el.flex_1().w_full().overflow_x_hidden()
                     })
-                    .when_some(max_width, |el, max_width| el.max_w(max_width))
+                    .when_some(content_max_width, |el, max_width| el.max_w(max_width))
                     .children(content),
             )
             .children(match self {

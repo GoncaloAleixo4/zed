@@ -2,6 +2,8 @@ use super::{
     KernelSession, KernelSpecification, RunningKernel, WslKernelSpecification,
     build_python_exec_shell_script, start_kernel_tasks,
 };
+use crate::repl_settings::ReplSettings;
+use settings::Settings as _;
 use anyhow::{Context as _, Result};
 use futures::{
     AsyncBufReadExt as _, StreamExt as _,
@@ -77,6 +79,16 @@ impl WslRunningKernel {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Box<dyn RunningKernel>>> {
+        // Resolve the COLUMNS hint before the spawn so we don't have to
+        // re-enter the app context from the async block. None means "do not
+        // override the kernel's default" — important because libraries like
+        // polars render unnecessarily wide tables when COLUMNS is large.
+        let columns_hint: Option<usize> =
+            match ReplSettings::get_global(cx).output_max_width_columns {
+                0 => None,
+                n => Some(n),
+            };
+
         window.spawn(cx, async move |cx| {
             // For WSL2, we need to get the WSL VM's IP address to connect to it
             // because WSL2 runs in a lightweight VM with its own network namespace.
@@ -212,18 +224,27 @@ impl WslRunningKernel {
 
             let mut env_assignments: Vec<String> = Vec::new();
             if let Some(env) = &kernel_specification.kernelspec.env {
-                env_assignments.reserve(env.len());
+                env_assignments.reserve(env.len() + 1);
                 for (key, value) in env {
                     let assignment = format!("{key}={value}");
                     let assignment = shlex::try_quote(&assignment)
                         .map(|quoted| quoted.into_owned())?;
                     env_assignments.push(assignment);
                 }
+            }
 
-                if !env_assignments.is_empty() {
-                    kernel_args.push("env".to_string());
-                    kernel_args.extend(env_assignments.iter().cloned());
-                }
+            if let Some(hint) = columns_hint {
+                // Pushed last so it overrides any COLUMNS that may be present
+                // in the kernelspec env block.
+                let columns_assignment = format!("COLUMNS={hint}");
+                let columns_assignment = shlex::try_quote(&columns_assignment)
+                    .map(|quoted| quoted.into_owned())?;
+                env_assignments.push(columns_assignment);
+            }
+
+            if !env_assignments.is_empty() {
+                kernel_args.push("env".to_string());
+                kernel_args.extend(env_assignments.iter().cloned());
             }
 
             kernel_args.extend(resolved_argv.iter().cloned());
